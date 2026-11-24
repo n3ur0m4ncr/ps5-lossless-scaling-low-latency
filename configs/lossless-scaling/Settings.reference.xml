@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Arquivo de Referência Sanitizado — Lossless Scaling (LSFG 3.1)
+  Caminho padrão no Windows: %LOCALAPPDATA%\Lossless Scaling\Settings.xml
+
+  NOTAS DE ENGENHARIA:
+  1. PreferredGpuId = 2 seleciona explicitamente a dGPU dedicada (NVIDIA GeForce GTX 1650)
+     na enumeração DXGI típica de notebooks NVIDIA Optimus (0 = Auto, 1 = Intel UHD iGPU, 2 = NVIDIA dGPU).
+     Confirme a ordem exata das GPUs no menu dropdown "GPU Preferida" do Lossless Scaling na sua máquina.
+  2. ScalingType = Off elimina o passe extra de upscaling espacial (fluxo já é 1080p -> 1080p nativo).
+  3. QueueTarget = 0 e MaxFrameLatency = 1 removem 16,7 ms a 33,3 ms de fila interna de captura.
+  4. LSFGFlowScale = 85 (MPC-BE, GPU dedicada livre) vs. 70 (OBS Studio, reserva margem para NVENC + cena).
+-->
+<Settings xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <WindowMaximized>false</WindowMaximized>
+  <WindowHeight>720</WindowHeight>
+  <WindowWidth>980</WindowWidth>
+  <ProfileListWidth>250</ProfileListWidth>
+  <Hotkey>S</Hotkey>
+  <HotkeyModifierKeys>Alt Control</HotkeyModifierKeys>
+  <GpuPreference>0</GpuPreference>
+  <GpuPreferenceChangeCount>0</GpuPreferenceChangeCount>
+  <SetupPhase>0</SetupPhase>
+  <StartAsAdmin>true</StartAsAdmin>
+  <StartAtWindowsStartup>false</StartAtWindowsStartup>
+  <MinimizeToTray>false</MinimizeToTray>
+  <CloseToTray>false</CloseToTray>
+  <Language>System</Language>
+  <Theme>System</Theme>
+  <FrameGenerationCollapsed>false</FrameGenerationCollapsed>
+  <CursorOptionsCollapsed>false</CursorOptionsCollapsed>
+  <RenderingOptionsCollapsed>false</RenderingOptionsCollapsed>
+  <CaptureOptionsCollapsed>false</CaptureOptionsCollapsed>
+  <GpuDisplayOptionsCollapsed>false</GpuDisplayOptionsCollapsed>
+  <CropInputOptionsCollapsed>false</CropInputOptionsCollapsed>
+  <BehaviorCollapsed>false</BehaviorCollapsed>
+  <LegacyOptionsCollapsed>false</LegacyOptionsCollapsed>
+  <GameProfiles>
+    <!-- Perfil Global Padrão (Fallback seguro sem upscaler redundante nem G-Sync forçado) -->
+    <Profile>
+      <Title>Padrão</Title>
+      <AutoScale>false</AutoScale>
+      <AutoScaleDelay>0</AutoScaleDelay>
+      <ScalingMode>Auto</ScalingMode>
+      <ScalingFitMode>AspectRatio</ScalingFitMode>
+      <ScaleFactor>1</ScaleFactor>
+      <ResizeBeforeScaling>false</ResizeBeforeScaling>
+      <WindowedMode>false</WindowedMode>
+      <ScalingType>Off</ScalingType>
+      <FSRType>OPTIMIZED</FSRType>
+      <LS1Type>PERFORMANCE</LS1Type>
+      <LSFG2Mode>X2</LSFG2Mode>
+      <LSFG3Mode1>FIXED</LSFG3Mode1>
+      <LSFG3Multiplier>2</LSFG3Multiplier>
+      <LSFG3Target>60</LSFG3Target>
+      <LSFGFlowScale>75</LSFGFlowScale>
+      <LSFGSize>PERFORMANCE</LSFGSize>
+      <Anime4kType>S</Anime4kType>
+      <Sharpness>0</Sharpness>
+      <LS1Sharpness>0</LS1Sharpness>
+      <VRS>false</VRS>
+      <FrameGeneration>LSFG3</FrameGeneration>
+      <ClipCursor>false</ClipCursor>
+      <AdjustCursorSpeed>false</AdjustCursorSpeed>
+      <HideCursor>false</HideCursor>
+      <ScaleCursor>false</ScaleCursor>
+      <SyncMode>OFF</SyncMode>
+      <MaxFrameLatency>1</MaxFrameLatency>
+      <GsyncSupport>false</GsyncSupport>
+      <HdrSupport>false</HdrSupport>
+      <DrawFps>true</DrawFps>
+      <CaptureApi>DXGI</CaptureApi>
+      <QueueTarget>0</QueueTarget>
+      <PreferredGpuId>2</PreferredGpuId>
+      <OutputDisplayId>0</OutputDisplayId>
+      <CropInput>false</CropInput>
+      <CropInputLeft>0</CropInputLeft>
+      <CropInputTop>0</CropInputTop>
+      <CropInputRight>0</CropInputRight>
+      <CropInputBottom>0</CropInputBottom>
+      <MultiDisplayMode>false</MultiDisplayMode>
+    </Profile>
+
+    <!-- MODO 1: Fora de Live (Menor Input Lag Possível via DirectShow EVR-CP) -->
+    <Profile>
+      <Title>MPC-BE - GTA 6 (60 FPS)</Title>
+      <Path>mpc-be64.exe</Path>
+      <AutoScale>false</AutoScale>
+      <AutoScaleDelay>0</AutoScaleDelay>
+      <ScalingMode>Auto</ScalingMode>
+      <ScalingFitMode>AspectRatio</ScalingFitMode>
+      <ScaleFactor>1</ScaleFactor>
+      <ResizeBeforeScaling>false</ResizeBeforeScaling>
+      <WindowedMode>false</WindowedMode>
+      <ScalingType>Off</ScalingType>
+      <FSRType>OPTIMIZED</FSRType>
+      <LS1Type>BALANCED</LS1Type>
+      <LSFG2Mode>X2</LSFG2Mode>
+      <LSFG3Mode1>FIXED</LSFG3Mode1>
+      <LSFG3Multiplier>2</LSFG3Multiplier>
+      <LSFG3Target>60</LSFG3Target>
+      <LSFGFlowScale>85</LSFGFlowScale>
+      <LSFGSize>PERFORMANCE</LSFGSize>
+      <Anime4kType>S</Anime4kType>
+      <Sharpness>0</Sharpness>
+      <LS1Sharpness>0</LS1Sharpness>
+      <VRS>false</VRS>
+      <FrameGeneration>LSFG3</FrameGeneration>
+      <ClipCursor>false</ClipCursor>
+      <AdjustCursorSpeed>false</AdjustCursorSpeed>
+      <HideCursor>false</HideCursor>
+      <ScaleCursor>false</ScaleCursor>
+      <SyncMode>OFF</SyncMode>
+      <MaxFrameLatency>1</MaxFrameLatency>
+      <GsyncSupport>false</GsyncSupport>
+      <HdrSupport>false</HdrSupport>
+      <DrawFps>true</DrawFps>
+      <CaptureApi>DXGI</CaptureApi>
+      <QueueTarget>0</QueueTarget>
+      <PreferredGpuId>2</PreferredGpuId>
+      <OutputDisplayId>0</OutputDisplayId>
+      <CropInput>false</CropInput>
+      <CropInputLeft>0</CropInputLeft>
+      <CropInputTop>0</CropInputTop>
+      <CropInputRight>0</CropInputRight>
+      <CropInputBottom>0</CropInputBottom>
+      <MultiDisplayMode>false</MultiDisplayMode>
+    </Profile>
+
+    <!-- MODO 2: Em Live / Gravação (OBS Studio Projetor em Tela Cheia + NVENC) -->
+    <Profile>
+      <Title>OBS - GTA 6 (60 FPS)</Title>
+      <Path>obs64.exe</Path>
+      <AutoScale>false</AutoScale>
+      <AutoScaleDelay>0</AutoScaleDelay>
+      <ScalingMode>Auto</ScalingMode>
+      <ScalingFitMode>AspectRatio</ScalingFitMode>
+      <ScaleFactor>1</ScaleFactor>
+      <ResizeBeforeScaling>false</ResizeBeforeScaling>
+      <WindowedMode>false</WindowedMode>
+      <ScalingType>Off</ScalingType>
+      <FSRType>OPTIMIZED</FSRType>
+      <LS1Type>BALANCED</LS1Type>
+      <LSFG2Mode>X2</LSFG2Mode>
+      <LSFG3Mode1>FIXED</LSFG3Mode1>
+      <LSFG3Multiplier>2</LSFG3Multiplier>
+      <LSFG3Target>60</LSFG3Target>
+      <LSFGFlowScale>70</LSFGFlowScale>
+      <LSFGSize>PERFORMANCE</LSFGSize>
+      <Anime4kType>S</Anime4kType>
+      <Sharpness>0</Sharpness>
+      <LS1Sharpness>0</LS1Sharpness>
+      <VRS>false</VRS>
+      <FrameGeneration>LSFG3</FrameGeneration>
+      <ClipCursor>false</ClipCursor>
+      <AdjustCursorSpeed>false</AdjustCursorSpeed>
+      <HideCursor>false</HideCursor>
+      <ScaleCursor>false</ScaleCursor>
+      <SyncMode>OFF</SyncMode>
+      <MaxFrameLatency>1</MaxFrameLatency>
+      <GsyncSupport>false</GsyncSupport>
+      <HdrSupport>false</HdrSupport>
+      <DrawFps>true</DrawFps>
+      <CaptureApi>DXGI</CaptureApi>
+      <QueueTarget>0</QueueTarget>
+      <PreferredGpuId>2</PreferredGpuId>
+      <OutputDisplayId>0</OutputDisplayId>
+      <CropInput>false</CropInput>
+      <CropInputLeft>0</CropInputLeft>
+      <CropInputTop>0</CropInputTop>
+      <CropInputRight>0</CropInputRight>
+      <CropInputBottom>0</CropInputBottom>
+      <MultiDisplayMode>false</MultiDisplayMode>
+    </Profile>
+  </GameProfiles>
+</Settings>

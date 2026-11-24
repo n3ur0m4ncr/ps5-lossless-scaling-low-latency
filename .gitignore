@@ -1,0 +1,28 @@
+# OS & Editor metadata
+Thumbs.db
+Desktop.ini
+.DS_Store
+.vscode/
+.idea/
+
+# Backups & Temporary diagnostic outputs
+*.bak
+*.tmp
+*.log
+backups/
+restore-*.json
+diag-report-*.json
+
+# Local user overrides (never commit machine-specific configs)
+*.local.xml
+*.local.ini
+
+# Defense-in-depth: block raw OBS / user profile files containing stream keys or tokens
+# Only explicitly named *.reference.ini / *.reference.xml templates are tracked
+configs/**/basic.ini
+configs/**/service.json
+configs/**/streamEncoder.json
+configs/**/recordEncoder.json
+configs/**/global.ini
+configs/**/Settings.xml
+configs/**/mpc-be64.ini
