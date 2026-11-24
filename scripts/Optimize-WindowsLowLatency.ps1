@@ -9,14 +9,16 @@
 
     Camadas otimizadas por este script:
       1. DWM Windowed Game Optimizations (SwapEffectUpgradeEnable=1 em DirectXUserGlobalSettings):
-         Promove janelas DX11/DXGI sem bordas do modelo legado BitBlt para Flip Model / Independent Flip
-         (-8 ms a -16 ms de latência de composição do Desktop Window Manager).
+         Promove janelas DX10/DX11 legadas (blt-model) sem bordas para Flip Model / Independent Flip
+         (ganho estimado condicional de -8 ms a -16 ms onde swapchains D3D10/11 blt-model estariam ativas).
       2. Afinidade explícita de GPU de Alto Desempenho (GpuPreference=2; no registro DirectX):
          Garante que LosslessScaling.exe, mpc-be64.exe e obs64.exe iniciem na dGPU dedicada (GTX 1650),
-         prevenindo o colapso para ~15 FPS (~66,7 ms) na Intel UHD Graphics (128 MB VRAM).
-      3. Desativação de Xbox GameDVR / Captura em Segundo Plano (GameDVR_Enabled=0, AppCaptureEnabled=0):
-         Remove hooks de gravação contínua na swapchain DXGI (-3 ms a -8 ms).
-      4. Ativação do Windows Game Mode (AutoGameModeEnabled=1):
+         prevenindo o colapso medido de ~15 FPS (~66,7 ms) na Intel UHD Graphics (128 MB VRAM).
+      3. Desativação de Xbox GameDVR, Captura em Fundo e Interceptação FSE (GameDVR_Enabled=0,
+         AppCaptureEnabled=0 e GameDVR_FSEBehaviorMode=2 em HKCU:\System\GameConfigStore):
+         Remove hooks de gravação contínua e wrappers de Fullscreen Optimizations/GameBar na swapchain
+         (redução estimada de -3 ms a -8 ms; reversível via -RestoreFromBackup).
+      4. Ativação do Windows Game Mode (AutoGameModeEnabled=1 e AllowAutoGameMode=1):
          Prioriza agendamento de threads gráficas e suprime picos de tarefas de fundo.
       5. Desativação da Suspensão Seletiva USB (AC=0 e DC=0 no plano de energia ativo):
          Impede transições de economia de energia U1/U2/U3 no controlador xHCI USB 3.0 que causam
@@ -241,20 +243,20 @@ foreach ($app in $discoveredApps) {
     })
 }
 
-$dvrOk = ($gameDvrEnabled -eq 0) -and ($appCapture -eq 0)
+$dvrOk = ($gameDvrEnabled -eq 0) -and ($appCapture -eq 0) -and ($fseBehaviorMode -eq 2)
 $auditRows.Add([PSCustomObject]@{
-    Camada   = 'Xbox GameDVR / Background Capture'
-    Atual    = "GameDVR_Enabled=$gameDvrEnabled, AppCaptureEnabled=$appCapture"
-    Alvo     = 'GameDVR_Enabled=0, AppCaptureEnabled=0'
+    Camada   = 'Xbox GameDVR / FSE Behavior'
+    Atual    = "GameDVR=$gameDvrEnabled, AppCap=$appCapture, FSEMode=$fseBehaviorMode"
+    Alvo     = 'GameDVR=0, AppCap=0, FSEMode=2'
     Status   = $(if ($dvrOk) { 'OK' } else { 'SUB-OTIMO' })
-    Impacto  = '-3 ms a -8 ms (remove hook de gravacao DXGI)'
+    Impacto  = '-3 ms a -8 ms est. (sem hooks GameDVR/FSE)'
 })
 
-$gmOk = ($autoGameMode -eq 1)
+$gmOk = ($autoGameMode -eq 1) -and ($allowGameMode -eq 1)
 $auditRows.Add([PSCustomObject]@{
     Camada   = 'Windows Game Mode'
-    Atual    = "AutoGameModeEnabled=$autoGameMode"
-    Alvo     = 'AutoGameModeEnabled=1'
+    Atual    = "AutoGameMode=$autoGameMode, AllowAuto=$allowGameMode"
+    Alvo     = 'AutoGameMode=1, AllowAuto=1'
     Status   = $(if ($gmOk) { 'OK' } else { 'SUB-OTIMO' })
     Impacto  = 'Prioridade de escalonamento CPU/GPU'
 })

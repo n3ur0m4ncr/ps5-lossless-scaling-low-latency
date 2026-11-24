@@ -35,7 +35,7 @@ A sequência exibida a 120 FPS ($8,33\text{ ms}$ por passo) torna-se:
 
 $$S_{60 \to 120} = \{\underbrace{A,\; A,\; A}_{25,0\text{ ms estático}},\; \underbrace{AB_{0.5}}_{8,33\text{ ms}},\; \underbrace{B,\; B,\; B}_{25,0\text{ ms estático}},\; \underbrace{BC_{0.5}}_{8,33\text{ ms}},\; \dots\}$$
 
-**Consequências medidas:**
+**Consequências:**
 - **Judder severo (Assimetria 3:1):** A imagem permanece congelada por $25,0\text{ ms}$ e salta em $8,33\text{ ms}$, destruindo a fluidez visual apesar do contador marcar `120 FPS`.
 - **Dobro de carga nos shaders e no barramento USB:** A GPU executa inferência óptica 120 vezes por segundo (metade delas desperdiçada comparando imagens idênticas) e trafega `248,83 MB/s` pela USB 3.0 em vez de `124,42 MB/s`.
 
@@ -64,8 +64,10 @@ sequenceDiagram
     LSFG->>PNL: "Apresenta A (t0) e Sintetiza AB_0.5 (t0 + 16,67 ms)"
 ```
 
-### 1.4 Interação com Painel de `144 Hz` sem G-Sync
-O painel interno do notebook opera a $144\text{ Hz}$ fixos ($T_{\text{scanout}} = \frac{1000}{144} = 6,944\text{ ms}$) sem *Variable Refresh Rate*. Como $\frac{144}{60} = 2,4$ ciclos de atualização por quadro gerado, e com `SyncMode = OFF` (apresentação imediata sem fila VSync), os quadros de $16,67\text{ ms}$ acomodam-se em cadência `2:3` de ciclos de *refresh* ($2 \times 6,944 = 13,89\text{ ms}$ e $3 \times 6,944 = 20,83\text{ ms}$). O desvio máximo de fase é limitado a meio período de *refresh* ($\pm 3,47\text{ ms}$), mantendo percepção contínua de 60 FPS sem o atraso de fila que o VSync tradicional imporia.
+### 1.4 Interação com Painel de `144 Hz` sem G-Sync (`SyncMode = OFF`)
+O painel interno do notebook opera a $144\text{ Hz}$ fixos ($T_{\text{scanout}} = \frac{1000}{144} = 6,944\text{ ms}$) sem *Variable Refresh Rate* ($\frac{144}{60} = 2,4$ varreduras de tela por quadro de $60\text{ FPS}$):
+- Caso o VSync estivesse ativo, os quadros de $16,67\text{ ms}$ seriam quantizados nos pulsos de *VBlank* seguindo um padrão misto **`2-2-3-2-3`** ciclos de *refresh* ($13,89\text{ ms}, 13,89\text{ ms}, 20,83\text{ ms}, \dots$, com desvio de fase de até $\pm 3,47\text{ ms}$), além de incorrer na penalidade de fila de sincronização vertical.
+- Com **`SyncMode = OFF`** (*apresentação assíncrona / tearing permitido*), cada quadro real ou interpolado é comutado imediatamente assim que fica pronto a cada $\sim 16,67\text{ ms}$, sem aguardar o *VBlank*. Em troca de eliminar a fila de espera do VSync, ocorre *tearing* horizontal assíncrono; porém, como cada varredura completa de `144 Hz` dura apenas **`6,94 ms`**, qualquer linha de corte permanece visível por uma fração mínima de tempo, sendo drasticamente mais discreta do que em telas de 60 Hz.
 
 ---
 
@@ -116,9 +118,9 @@ Quando `PreferredGpuId = 0` (*Automático*) estava ativo no Lossless Scaling jun
 Ao fixar **`PreferredGpuId = 2`** (GTX 1650), **`GpuPreference = 2;`** para ambos os binários (player + Lossless Scaling) e **`CaptureApi = DXGI`**, tanto a renderização do quadro capturado quanto a captura `IDXGIOutputDuplication` e a síntese `LSFG 3.1` ocorrem integralmente dentro da VRAM GDDR6 da GTX 1650, restando apenas **uma única transferência final via PCIe** do *backbuffer* pronto para o motor de *scanout* da Intel UHD.
 
 ### 3.2 DWM *BitBlt* vs. *Independent Flip* no Windows 11 25H2
-Como o Lossless Scaling sobrepõe uma janela *borderless topmost* sobre o player (`ExclusiveFullscreen = 0`), a apresentação passa pelo **Desktop Window Manager (DWM)**:
-- **Com `SwapEffectUpgradeEnable = 0` (*Otimizações para jogos em janela* desligado):** Aplicações DirectX 11 que criam swapchains no modo antigo `DXGI_SWAP_EFFECT_DISCARD` caem em apresentação **BitBlt**, exigindo cópia extra para superfície intermediária do DWM e espera pelo próximo ciclo de composição da área de trabalho (**+8 ms a +16 ms**).
-- **Com `SwapEffectUpgradeEnable = 1` + `GameDVR_Enabled = 0`:** O runtime DirectX 11 promove automaticamente a swapchain para **Flip Model** (`DXGI_SWAP_EFFECT_FLIP_DISCARD`), habilitando *DirectFlip / Independent Flip* (ou *Composed: Flip* otimizado em MSHybrid) e removendo hooks de gravação em segundo plano do Xbox Game Bar (**economia combinada de 11 ms a 24 ms**).
+Como o Lossless Scaling sobrepõe uma janela *borderless topmost* sobre o player (`ExclusiveFullscreen = 0`), a apresentação interage com o **Desktop Window Manager (DWM)**:
+- **Escopo técnico de `SwapEffectUpgradeEnable = 1` (*Otimizações para jogos em janela*):** Esta chave do DirectX promove automaticamente swapchains em janela **DirectX 10/11 legadas (*blt-model*, `DXGI_SWAP_EFFECT_DISCARD`)** para **Flip Model** (`DXGI_SWAP_EFFECT_FLIP_DISCARD`), evitando cópia intermediária extra de composição DWM (**redução estimada condicional de `-8 ms a -16 ms`** sempre que uma superfície D3D10/11 *blt-model* estaria no caminho). Vale notar com precisão que o `LosslessScaling.exe` já instancia swapchain DXGI *Flip Model* nativamente e o `MPC-BE` (`EVR-CP`) opera sobre apresentador `D3D9Ex`; portanto, o ganho direto dessa flag atua especificamente sobre janelas D3D11 que ainda cairiam em *blt-model* e garante consistência global da pilha gráfica.
+- **Remoção de hooks GameDVR e wrappers FSE (`GameDVR_Enabled = 0`, `AppCaptureEnabled = 0`, `GameDVR_FSEBehaviorMode = 2`):** Desativa a captura histórica/segundo plano da Xbox Game Bar e desliga globalmente as interceptações de *Fullscreen Optimizations* (`FSEBehaviorMode = 2`), reduzindo um overhead estimado de **`-3 ms a -8 ms`** em hooks DXGI.
 
 ---
 
@@ -181,18 +183,21 @@ Pelo **princípio da causalidade física**, o computador **não pode adivinhar o
 
 Portanto, **qualquer** geração de quadros por interpolação temporal sobre fonte externa de 30 FPS carrega um **custo algorítmico mínimo irredutível de $T_{\text{base}} = \frac{1000}{30} = 33,33\text{ ms}$** em troca de dobrar a resolução temporal percebida pelo sistema visual humano (`30 Hz -> 60 Hz`).
 
-### 6.2 Equação Completa de Latência e Eliminação da Gordura Parasita
+### 6.2 Equação Analítica de Latência e Eliminação Estimada da Gordura Parasita
 
-Podemos decompor a latência total adicionada pelo PC receptor ($L_{\text{PC}}$) em duas parcelas:
+> [!NOTE]
+> **Metodologia das métricas:** Os valores de `~15 FPS`, clock travado em `645 MHz` (`nvidia-smi`) e contador `60 / 120` (`AvgTimePerFrame=166666`) foram diagnosticados diretamente no sistema real. Já os intervalos em milissegundos (`ms`) abaixo são **estimativas analíticas teóricas** derivadas dos períodos de amostragem (`33,33 ms` / `16,67 ms` / `6,94 ms`), profundidade de filas e escalonamento proporcional de clock dos *shaders* (sem medição óptica ponta-a-ponta por câmera de alta velocidade / LDAT).
 
-$$L_{\text{PC}} = \underbrace{\left(L_{\text{USB+UVC}} + T_{\text{hold\_30fps}} + L_{\text{shader\_P0}} + L_{\text{scanout\_144Hz}}\right)}_{L_{\text{física\_mínima}} \;\approx\; 48\text{–}55\text{ ms}} + \underbrace{\left(\Delta L_{\text{Queue}} + \Delta L_{\text{PState}} + \Delta L_{\text{DWM}} + \Delta L_{\text{GameDVR}} + \Delta L_{\text{OBS\_Scene}}\right)}_{L_{\text{parasita}}}$$
+Podemos decompor analiticamente a latência adicionada pelo PC receptor ($L_{\text{PC}}$) em duas parcelas:
 
-Antes da intervenção, $L_{\text{parasita}}$ somava **entre `+55 ms` e `> +95 ms` extras** (chegando ao colapso de `> 150 ms` quando caía em ~15 FPS na iGPU), tornando a mira e direção de veículos pesadas e atrasadas. Após a arquitetura de dois perfis documentada neste repositório:
+$$L_{\text{PC}} = \underbrace{\left(L_{\text{USB+UVC}} + T_{\text{hold\_30fps}} + L_{\text{shader\_P0}} + L_{\text{scanout\_144Hz}}\right)}_{L_{\text{física\_mínima\;(est.)}} \;\approx\; 48\text{–}55\text{ ms}} + \underbrace{\left(\Delta L_{\text{Queue}} + \Delta L_{\text{PState}} + \Delta L_{\text{DWM}} + \Delta L_{\text{GameDVR}} + \Delta L_{\text{OBS\_Scene}}\right)}_{L_{\text{parasita\;(est.)}}}$$
 
-- $\Delta L_{\text{Queue}}$ (`QueueTarget: 1 -> 0`): **zerado** (`-16,7 ms a -33,3 ms`)
-- $\Delta L_{\text{PState}}$ (`645 MHz -> 1785 MHz` + `LS1 Off` + `Performance`): **zerado** (`-7 ms a -9 ms`, ou fim do colapso de `66,7 ms` da iGPU)
-- $\Delta L_{\text{DWM}}$ (`BitBlt -> Independent Flip`): **zerado** (`-8 ms a -16 ms`)
-- $\Delta L_{\text{GameDVR}}$ (`GameDVR_Enabled: 1 -> 0`): **zerado** (`-3 ms a -8 ms`)
-- $\Delta L_{\text{OBS\_Scene}}$ (Bypass via `MPC-BE EVR-CP` fora de live): **zerado** (`-20 ms a -35 ms`)
+Antes da arquitetura-alvo, $L_{\text{parasita}}$ acumulava uma penalidade estimada **entre `+55 ms` e `> +95 ms` extras** (chegando ao colapso de `> 150 ms` quando caía em ~15 FPS na iGPU), tornando a mira e direção de veículos pesadas e atrasadas. Com a configuração-alvo de dois perfis documentada neste repositório:
 
-O resultado aproxima assintoticamente o sistema do **piso físico teórico absoluto** permitido pelas leis de amostragem de sinais a 30 FPS em 144 Hz, entregando resposta imediata ao DualSense com fluidez visual sólida de **60 FPS**.
+- $\Delta L_{\text{Queue}}$ (`QueueTarget: 1 -> 0`): **eliminado** (redução estimada de `-16,7 ms a -33,3 ms`)
+- $\Delta L_{\text{PState}}$ (`645 MHz -> 1785 MHz` + `LS1 Off` + `Performance`): **eliminado** (redução estimada de `-7 ms a -9 ms`, além de evitar o colapso medido de `~15 FPS` / `66,7 ms` na iGPU)
+- $\Delta L_{\text{DWM}}$ (`BitBlt -> Flip Model` condicional em D3D10/11): **eliminado** (redução estimada condicional de `-8 ms a -16 ms`)
+- $\Delta L_{\text{GameDVR}}$ (`GameDVR_Enabled: 1 -> 0`, `AppCaptureEnabled: 1 -> 0`, `FSEBehaviorMode = 2`): **eliminado** (redução estimada de `-3 ms a -8 ms`)
+- $\Delta L_{\text{OBS\_Scene}}$ (Bypass via `MPC-BE EVR-CP` fora de live): **eliminado** (redução estimada de `-20 ms a -35 ms`)
+
+O resultado aproxima o sistema do **piso físico teórico** permitido pelas leis de amostragem de sinais a 30 FPS em 144 Hz, entregando resposta ágil ao DualSense com fluidez visual sólida de **60 FPS**.

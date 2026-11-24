@@ -35,7 +35,7 @@ Conectar um **PlayStation 5** rodando um título de **30 FPS** (como **GTA 6**) 
 4. **Passes redundantes de shader e sinalização VRR indevida:** `ScalingType = LS1` (`Sharpness = 2`) ligado sobre sinal nativo `1080p -> 1080p` (introduzindo custo extra de GPU e *ringing* no HUD) e `GsyncSupport = true` em tela eDP sem suporte a G-Sync.
 5. **Acúmulo de filas parasitas no Windows, DWM e OBS:** `SwapEffectUpgradeEnable = 0` (DWM preso em *BitBlt* legado, +8 a +16 ms), `GameDVR_Enabled = 1` (+3 a +8 ms), `QueueTarget = 1` (+16,7 a +33,3 ms), `Suspensão Seletiva USB = Ativada` e uso desnecessário do compositor completo do OBS Studio (+20 a +35 ms) mesmo durante sessões de gameplay offline.
 
-Este repositório documenta e automatiza a eliminação integral dessas cinco camadas parasitas, estabilizando **`30 / 60 FPS` reais** e removendo de **`~55 ms` a `> 95 ms` de latência parasita acumulada**.
+Este repositório documenta e automatiza a eliminação dessas cinco camadas parasitas, definindo a arquitetura-alvo para estabilizar **`30 / 60 FPS` reais** com redução estimada de **`~55 ms` a `> 95 ms` de latência parasita acumulada**.
 
 ---
 
@@ -116,42 +116,47 @@ flowchart LR
 
 ## 4. Comparativo Completo: Antes vs. Depois (FPS, Frame Time e Clocks)
 
-| Métrica / Subsistema | ANTES (Colapso Auto iGPU) | ANTES (OBS 60 FPS s/ Tuning) | DEPOIS — Modo Live (OBS + LSFG) | DEPOIS — Modo Offline (MPC-BE + LSFG) |
+> [!NOTE]
+> **Transparência Metodológica (Diagnósticos Medidos vs. Configuração-Alvo Estimada):** Os dados de `~15 FPS` (queda na iGPU), clock preso em `645 MHz` (`nvidia-smi` sob carga no OBS vs. `1785 MHz` máx.), contador `60 / 120` (`AvgTimePerFrame=166666`) e erro `0x800705AA` nos logs do OBS foram **medidos e diagnosticados diretamente na máquina real**. As colunas **DEPOIS** representam a **configuração-alvo completa** provida por `configs/` e `scripts/`, e os valores de redução de *input lag* em milissegundos (`ms`) nas seções 5 e 6 são **estimativas analíticas teóricas** baseadas em períodos de quadro, filas de swapchain e escalonamento de clock (não houve medição óptica ponta-a-ponta via sensor LDAT/câmera de alta velocidade).
+
+| Métrica / Subsistema | ANTES (Colapso Auto iGPU) | ANTES (OBS 60 FPS s/ Tuning) | DEPOIS — Modo Live (Alvo: OBS + LSFG) | DEPOIS — Modo Offline (Alvo: MPC-BE + LSFG) |
 | :--- | :--- | :--- | :--- | :--- |
 | **GPU Executando LSFG** | `Intel UHD Graphics` (`PreferredGpuId=0`) | `GTX 1650` (c/ downclock P-state) | **`GTX 1650` (`PreferredGpuId=2`)** | **`GTX 1650` (`PreferredGpuId=2`)** |
-| **Clock Gráfico Medido** | iGPU compartilhada (128 MB VRAM) | **`645 MHz`** (2,77x abaixo do boost!) | **`~1785 MHz` (`P0` Max Perf DRS)** | **`~1785 MHz` (`P0` Max Perf DRS)** |
+| **Clock Gráfico** | iGPU compartilhada (128 MB VRAM) | **`645 MHz` medidos** (2,77x abaixo do boost!) | **`~1785 MHz` (`P0` Max Perf DRS)** | **`~1785 MHz` (`P0` Max Perf DRS)** |
 | **Formato de Captura USB** | `1080p60` (`248,8 MB/s`) | `1080p60` (`AvgTime=166666`) | **`1080p30 YUY2` (`124,4 MB/s`)** | **`1080p30 YUY2` (`AvgTime=333333`)** |
-| **Contador Lossless Scaling** | `~15 FPS` (colapso total) | `60 / 120` (metade pares `A->A` falsos) | **`30 / 60` reais e constantes** | **`30 / 60` reais e constantes** |
+| **Contador Lossless Scaling** | `~15 FPS` medidos (colapso) | `60 / 120` medidos (pares `A->A` falsos) | **`30 / 60` reais e constantes** | **`30 / 60` reais e constantes** |
 | **Frame Time Efetivo Exibido** | `~66,7 ms` (injogável) | Assimetria `25,0 ms` / `8,33 ms` (*judder*) | **`16,67 ms` contínuos (60 Hz reais)** | **`16,67 ms` contínuos (60 Hz reais)** |
-| **Tempo de Shader LSFG 3.1** | `> 45 ms` (estouro de banda DDR4) | `~10–12 ms` (`645 MHz` + `LS1` + `Balanced`) | **`~3–4 ms`** (`Performance`, `Flow=70%`) | **`~3–4 ms`** (`Performance`, `Flow=85%`) |
+| **Tempo de Shader LSFG 3.1 (est.)** | Saturado na iGPU (`~66,7 ms` ciclo total) | `~10–12 ms` (`645 MHz` + `LS1` + `Balanced`) | **`~3–4 ms`** (`Performance`, `Flow=70%`) | **`~3–4 ms`** (`Performance`, `Flow=85%`) |
 | **API de Captura & Fila** | `WGC` + `QueueTarget = 1` | `WGC/DXGI` + `QueueTarget = 1` | **`DXGI` + `QueueTarget = 0`** | **`DXGI` + `QueueTarget = 0`** |
-| **Apresentação DWM Windows** | *BitBlt* legado + *GameDVR* ativo | *BitBlt* legado + *GameDVR* ativo | **Independent Flip + GameDVR Off** | **Independent Flip + GameDVR Off** |
+| **Apresentação DWM Windows** | *BitBlt* legado + *GameDVR* ativo | *BitBlt* legado + *GameDVR* ativo | **Flip Model + GameDVR/FSE Off** | **Flip Model + GameDVR/FSE Off** |
 
 ---
 
 ## 5. Decomposição Camada por Camada da Redução de Input Lag (em ms)
 
-A tabela abaixo consolida o ganho real de latência obtido em cada intervenção de engenharia sobre o caminho crítico entre a entrega USB e o *scanout* de `144 Hz`:
+A tabela abaixo consolida a **redução estimada de latência** de cada intervenção arquitetural sobre o caminho crítico entre a entrega USB e o *scanout* de `144 Hz`:
 
-| Camada do Pipeline | Estado Anterior (Diagnosticado) | Estado Otimizado Aplicado | Redução Direta de Input Lag |
+| Camada do Pipeline | Estado Anterior (Diagnosticado) | Configuração-Alvo Otimizada | Redução Estimada de Input Lag |
 | :--- | :--- | :--- | :--- |
-| **1. Roteamento Optimus & Motor LSFG** | `PreferredGpuId=0` (queda na Intel UHD ~66,7 ms) + `WGC` + `LS1` + `BALANCED` | `PreferredGpuId=2` (`GTX 1650`) + `DXGI` + `ScalingType=Off` + `PERFORMANCE` | **Elimina colapso de ~66,7 ms** (shader cai para **~3–4 ms**) |
-| **2. Fila Interna do Lossless Scaling** | `QueueTarget = 1` (retém 1 quadro extra de captura para *smoothing*) | **`QueueTarget = 0`** + `MaxFrameLatency = 1` + `SyncMode = OFF` | **`-16,7 ms` a `-33,3 ms`** |
-| **3. Clocks e Fila de Driver NVIDIA (`nvapi64.dll`)** | *Optimal Power* rebaixando GTX 1650 para **`645 MHz`** + fila padrão de driver | Perfis DRS (`0x1` *Max Perf* -> **`~1785 MHz`**, VSync *Force Off* `0x08416747`, *PreRender* = `1`) | **`-7,0 ms` a `-9,0 ms`** |
-| **4. Apresentação DWM (Windows 11 25H2)** | `SwapEffectUpgradeEnable = 0` (composição *BitBlt* legada) | **`SwapEffectUpgradeEnable = 1`** (*Flip Model / Independent Flip*) | **`-8,0 ms` a `-16,0 ms`** |
-| **5. Hooks DXGI em Segundo Plano & USB** | `GameDVR_Enabled = 1` + `Suspensão Seletiva USB = Ativada` | **`GameDVR_Enabled = 0`** + `AutoGameMode = 1` + **`USB Selective Suspend = 0x0`** | **`-3,0 ms` a `-8,0 ms`** (+ zero *micro-stutter* USB) |
-| **6. Bypass do Compositor (Modo Fora de Live)** | Jogar sempre pela prévia do OBS Studio (grafo de cena + *staging* + áudio OBS) | **`MPC-BE 1.9.3 x64`** direto em DirectShow (`EVR-CP`, `Buffers=4`, `VSync=0`, `WASAPI`) | **`-20,0 ms` a `-35,0 ms` adicionais** |
-| **TOTAL DE LATÊNCIA PARASITA REMOVIDA** | **Acúmulo severo de filas de software e downclock** | **Pipeline enxuto encostado no limite físico de amostragem** | **`~55 ms` a `> 95 ms` eliminados** |
+| **1. Roteamento Optimus & Motor LSFG** | `PreferredGpuId=0` (queda medida p/ ~15 FPS / ~66,7 ms na iGPU) + `WGC` + `LS1` + `BALANCED` | `PreferredGpuId=2` (`GTX 1650`) + `DXGI` + `ScalingType=Off` + `PERFORMANCE` | **Elimina colapso de ~66,7 ms** (shader est. em **~3–4 ms**) |
+| **2. Fila Interna do Lossless Scaling** | `QueueTarget = 1` (retém 1 quadro extra de captura para *smoothing*) | **`QueueTarget = 0`** + `MaxFrameLatency = 1` + `SyncMode = OFF` | **`-16,7 ms` a `-33,3 ms` (est.)** |
+| **3. Clocks e Fila de Driver NVIDIA (`nvapi64.dll`)** | *Optimal Power* rebaixando GTX 1650 para **`645 MHz`** (medido) + fila padrão | Perfis DRS (`0x1` *Max Perf* -> **`~1785 MHz`**, VSync *Force Off* `0x08416747`, *PreRender* = `1`) | **`-7,0 ms` a `-9,0 ms` (est.)** |
+| **4. Apresentação DWM (Windows 11 25H2)** | `SwapEffectUpgradeEnable = 0` (janelas D3D10/11 *blt-model* caem em *BitBlt*) | **`SwapEffectUpgradeEnable = 1`** (promove swapchains D3D10/11 *blt-model* p/ *Flip Model*\*) | **`-8,0 ms` a `-16,0 ms` (est. condicional\*)** |
+| **5. Hooks GameDVR, FSE Global & USB** | `GameDVR_Enabled = 1`, `AppCaptureEnabled = 1` + `Suspensão Seletiva USB = Ativada` | **`GameDVR_Enabled = 0`**, **`AppCaptureEnabled = 0`**, **`GameDVR_FSEBehaviorMode = 2`**, `AutoGameMode = 1`, **`USB Suspend = 0x0`** | **`-3,0 ms` a `-8,0 ms` (est.)** + zero *micro-stutter* USB |
+| **6. Bypass do Compositor (Modo Fora de Live)** | Jogar sempre pela prévia do OBS Studio (grafo de cena + *staging* + áudio OBS) | **`MPC-BE 1.9.3 x64`** direto em DirectShow (`EVR-CP`, `Buffers=4`, `VSync=0`, `WASAPI`) | **`-20,0 ms` a `-35,0 ms` adicionais (est.)** |
+| **TOTAL DE LATÊNCIA PARASITA REMOVIDA** | **Acúmulo severo de filas de software e downclock** | **Pipeline enxuto próximo ao limite físico de amostragem** | **`~55 ms` a `> 95 ms` (redução estimada)** |
+
+*\*Nota técnica sobre a Camada 4:* `SwapEffectUpgradeEnable=1` converte swapchains em janela DirectX 10/11 *blt-model* para *Flip Model*; como o `LosslessScaling.exe` já opera nativamente em DXGI *Flip Model* e o `EVR-CP` do MPC-BE utiliza `D3D9Ex`, esse ganho de `-8 a -16 ms` é condicional e atua especificamente onde janelas D3D10/11 *blt-model* entrariam na cadeia.
 
 ---
 
 ## 6. Análise Física Honesta: O Piso Irredutível de `33,33 ms` vs. Latência Parasita
 
-Por rigor científico, é fundamental compreender o **limite físico inferior** de qualquer arquitetura de interpolação temporal externa `30 -> 60 FPS`:
+Por rigor de engenharia, é fundamental distinguir o **limite físico inferior** de qualquer arquitetura de interpolação temporal externa `30 -> 60 FPS`:
 
 - **O Piso Algorítmico de Causalidade (`33,33 ms`):** Para sintetizar o quadro intermediário $F_{t+0.5}$ situado espacialmente entre o quadro atual $F_t$ e o próximo quadro $F_{t+1}$ de um sinal HDMI fechado (onde não há acesso aos vetores de movimento internos da engine do PS5), o interpolador **precisa aguardar a chegada física de $F_{t+1}$**. A uma taxa nativa de $30\text{ FPS}$, o intervalo entre dois quadros reais consecutivos é exatamente:
   $$T_{\text{piso}} = \frac{1000\text{ ms}}{30} = 33,33\text{ ms}$$
-- **O que a nossa engenharia fez:** Esse intervalo de $33,33\text{ ms}$ (somado aos `~3,5 ms` de síntese na GTX 1650 a `1785 MHz` e aos `6,94 ms` do *scanout* de `144 Hz`) constitui o **custo termodinâmico/informacional mínimo** para transformar 30 FPS em 60 FPS reais. Antes da otimização, havia **mais `55 ms a > 95 ms` de atrasos puramente parasitas** empilhados acima desse piso (filas de captura, *BitBlt*, GameDVR, *downclock* para `645 MHz` e composição do OBS). Ao **zerar toda a latência parasita**, o controle DualSense passa a responder no limite exato permitido pela física de sinais.
+- **O que a nossa engenharia faz:** Esse intervalo de $33,33\text{ ms}$ (somado aos `~3,5 ms` estimados de síntese na GTX 1650 a `1785 MHz` e aos `6,94 ms` do *scanout* de `144 Hz`) constitui o **custo algorítmico e físico mínimo de amostragem** para transformar 30 FPS em 60 FPS reais. Antes da otimização, somavam-se **mais `~55 ms a > 95 ms` estimados de atrasos puramente parasitas** acima desse piso (filas de captura, *BitBlt*, hooks GameDVR/FSE, *downclock* para `645 MHz` e composição desnecessária do OBS). Ao **eliminar a latência parasita**, o controle DualSense passa a responder no limite prático permitido pela física de sinais.
 
 > Para a dedução matemática completa, análise binária do `VIDEOINFOHEADER` e arquitetura Optimus/NVAPI, leia **[`docs/01-engenharia-de-latencia-e-frames.md`](docs/01-engenharia-de-latencia-e-frames.md)**.
 
@@ -177,7 +182,8 @@ Por rigor científico, é fundamental compreender o **limite físico inferior** 
 1. **Conecte o hardware corretamente:** PS5 em `1080p` (`HDR Off`, `RGB Limitado`, `HDCP Off`) -> `UGREEN 15390` conectada **diretamente em porta USB 3.0 azul/SuperSpeed** do notebook (sem hub) e tela do Windows em **`144 Hz`**.
 2. **Aplique as otimizações de Sistema e Driver NVIDIA** (PowerShell como **Administrador**):
    ```powershell
-   # Otimiza DWM Independent Flip, afinidade dGPU, GameDVR Off, Game Mode e USB Selective Suspend (com backup JSON automático)
+   # Otimiza DWM Flip (SwapEffectUpgradeEnable=1), afinidade dGPU, GameDVR/AppCapture Off,
+   # GameDVR_FSEBehaviorMode=2 (desliga Fullscreen Optimizations globalmente), Game Mode e USB Suspend (com backup JSON)
    .\scripts\Optimize-WindowsLowLatency.ps1
 
    # Grava perfis nvapi64.dll (Max Performance ~1785 MHz, VSync Force Off, Max Pre-Rendered Frames = 1)
@@ -221,4 +227,7 @@ ps5-lossless-scaling-low-latency/
 ## 10. Segurança e Privacidade (Zero Segredos)
 
 - **Zero Credenciais ou Tokens:** Nenhum arquivo deste repositório contém chaves de transmissão, `RefreshToken`, `Token`, `CookieId` ou identificadores de conta do OBS Studio; todos os caminhos utilizam variáveis padrão de ambiente (`%USERPROFILE%`, `%LOCALAPPDATA%`, `%APPDATA%`).
-- **Scripts Auditáveis e Reversíveis:** `Test-CapturePipelineHealth.ps1` é **100% somente leitura**; `Optimize-WindowsLowLatency.ps1` e `Configure-NvidiaDrsLowLatency.ps1` oferecem modo `-CheckOnly`, suporte nativo a `-WhatIf` e backup automático em JSON para reversão imediata (`-RestoreFromBackup`).
+- **Scripts Auditáveis e Reversíveis:**
+  - `Test-CapturePipelineHealth.ps1` é **100% somente leitura**;
+  - `Optimize-WindowsLowLatency.ps1` possui modos `-CheckOnly` e `-WhatIf`, gera backup automático em JSON (`.\backups\`) antes de qualquer escrita e reverte integralmente o estado anterior via `-RestoreFromBackup`;
+  - `Configure-NvidiaDrsLowLatency.ps1` possui modos `-CheckOnly` e `-WhatIf`, atua apenas nos perfis individuais dos 3 executáveis (`losslessscaling.exe`, `mpc-be64.exe`, `obs64.exe`) e pode ser revertido a qualquer momento em *Painel de Controle da NVIDIA -> Gerenciar configurações em 3D -> Configurações do programa -> Restaurar*.
